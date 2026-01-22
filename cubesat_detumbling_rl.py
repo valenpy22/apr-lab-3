@@ -389,7 +389,7 @@ class CubeSatDetumblingEnv(gym.Env):
             print(f"Warning: Quaternion rotation failed: {e}")
             return vector
 
-    def _calculate_reward(self, action, previous_angular_vel_norm):
+    def _calculate_reward(self, action, previous_angular_vel_norm, reward_scaling=1.0):
         """
         Reward: combina
         - objetivo: minimizar ||ω||
@@ -398,6 +398,7 @@ class CubeSatDetumblingEnv(gym.Env):
         - precisión: pequeño bonus continuo cuando estás en régimen fino
         - éxito: bonus grande al cruzar el umbral
         """
+
         try:
             angular_vel_norm = float(np.linalg.norm(self.rotation_sim.angular_velocity))
         except Exception:
@@ -419,16 +420,17 @@ class CubeSatDetumblingEnv(gym.Env):
         else:
             control_penalty = -0.01 * control_effort
 
-        # 4) Bonus de precisión (continuo): empuja a seguir bajando en zona fina
-        # precision_bonus = 0.0
-        # if angular_vel_norm < 0.1:
-        #     precision_bonus = 1.0 * (0.1 - angular_vel_norm)  # máx 0.1
-
-        # 5) Bonus por éxito (cruzar threshold)
+        # 4) Bonus por éxito (cruzar threshold)
         success_bonus = 50.0 if angular_vel_norm < self.success_threshold else 0.0
 
+        # 5) Total reward: scaling aplicado aquí
         reward = base_reward + shaped_reward + control_penalty + success_bonus
+
+        # Apply the reward scaling factor here
+        reward *= reward_scaling
+
         return float(reward)
+
 
 
     def render(self):

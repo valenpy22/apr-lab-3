@@ -45,7 +45,7 @@ from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.utils import set_random_seed
 from cubesat_detumbling_rl import CubeSatDetumblingEnv
 
-def make_env(max_steps=400, granularity=40, time_step=0.1, seed=0, log_dir=None, start_time=None):
+def make_env(max_steps=400, granularity=40, time_step=0.1, seed=0, log_dir=None, start_time=None, reward_scaling=1.0):
     """
     Creates and initializes a new environment for the CubeSat detumbling problem.
 
@@ -71,7 +71,8 @@ def make_env(max_steps=400, granularity=40, time_step=0.1, seed=0, log_dir=None,
             time_step=time_step,
             start_time=start_time,
             debug=False,
-            plot_hist=False
+            plot_hist=False,
+            reward_scaling=reward_scaling
         )
 
         env.reset(seed=seed)
@@ -1219,16 +1220,27 @@ def make_objective(
         gamma = trial.suggest_float("gamma", 0.90, 0.999)
         batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
         buffer_size = trial.suggest_categorical("buffer_size", [50_000, 100_000, 200_000])
+        neurons = trial.suggest_categorical("neurons", [64, 128, 256])
+        activation_function = trial.suggest_categorical("activation_function", ["relu", "tanh"])
+        reward_scaling = trial.suggest_categorical("reward_scaling", [0.1, 1.0, 10.0])
+        exploration_fraction = trial.suggest_float("exploration_fraction", 0.1, 0.5)
+        target_update_interval = trial.suggest_int("target_update_interval", 1000, 10000)
+        train_freq = trial.suggest_int("train_freq", 1, 10)
+
+        policy_kwargs = dict(
+            net_arch=[neurons, neurons],
+            activation_fn=activation_function,
+        )
 
         # Create and configure DQN model with suggested hyperparameters
         train_env = DummyVecEnv([make_env(
             max_steps=max_steps, granularity=granularity, time_step=time_step,
-            seed=seed_train, log_dir=None
+            seed=seed_train, log_dir=None, reward_scaling=reward_scaling
         )])
 
         eval_env = DummyVecEnv([make_env(
             max_steps=max_steps, granularity=granularity, time_step=time_step,
-            seed=seed_eval, log_dir=None
+            seed=seed_eval, log_dir=None, reward_scaling=reward_scaling
         )])
 
         model = DQN(
@@ -1240,8 +1252,9 @@ def make_objective(
             batch_size=batch_size,
             buffer_size=buffer_size,
             learning_starts=5_000,
-            train_freq=4,
-            target_update_interval=2_000,
+            train_freq=train_freq,
+            target_update_interval=target_update_interval,
+            exploration_fraction=exploration_fraction,
             verbose=0,
             device=device,
         )
@@ -1518,17 +1531,65 @@ def make_run_dirs(base_dir: str = "runs", exp_name: str = "dqn_cubesat", seed: i
     return paths
 
 def numpy_json_default(obj):
-    # Arrays -> listas
+    """
+    Converts NumPy objects to JSON-serializable Python types.
+    
+    This function serves as a default serializer for JSON encoding when handling
+    NumPy objects that are not natively JSON serializable. It handles NumPy arrays
+    and scalar types by converting them to their equivalent Python built-in types.
+    This is commonly used as the default parameter in json.dumps() when saving
+    experimental results or model metrics that contain NumPy data.
+    
+    Parameters:
+    -----------
+    obj : Any
+        The object to be converted to a JSON-serializable type. Expected types:
+        - numpy.ndarray: Converted to Python list
+        - numpy.float32, numpy.float64: Converted to Python float
+        - numpy.int32, numpy.int64: Converted to Python int
+        - numpy.bool_: Converted to Python bool
+    
+    Returns:
+    --------
+    Any
+        JSON-serializable equivalent of the input object:
+        - list for NumPy arrays
+        - float for NumPy float types
+        - int for NumPy integer types
+        - bool for NumPy boolean types
+    
+    Raises:
+    -------
+    TypeError
+        If the object type is not supported for JSON serialization.
+        This includes any non-NumPy objects that don't have built-in JSON support.
+    
+    Notes:
+    ------
+    - This function is essential for saving experiment results, metrics, and
+      hyperparameters that contain NumPy data structures to JSON files
+    - Common usage pattern: json.dumps(data, default=numpy_json_default)
+    - Preserves data structure integrity while ensuring JSON compatibility
+    - Only handles NumPy types; other custom objects will raise TypeError
+    """
+
+    # Arrays to lists
     if isinstance(obj, np.ndarray):
         return obj.tolist()
-    # Escalares numpy -> escalares Python
+    
+    # Numpy scalars to Python scalars
     if isinstance(obj, (np.float32, np.float64)):
         return float(obj)
+
+    # Numpy integers to Python integers
     if isinstance(obj, (np.int32, np.int64)):
         return int(obj)
+
+    # Numpy booleans to Python booleans
     if isinstance(obj, (np.bool_)):
         return bool(obj)
-    # Si aparece algo raro, lanza el error original
+
+    # If something weird appears, raise the original error
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 if __name__ == "__main__":
@@ -1729,6 +1790,7 @@ if __name__ == "__main__":
  
     best_model_path = "/home/mapacheroja/apr-lab-2/20260107_063620/best/best_model.zip"
 
+    """
     print("\n[4] Running granularity sweep...")
 
     GRANULARITIES = [20, 40, 60, 80]
@@ -1752,3 +1814,4 @@ if __name__ == "__main__":
 
     print(f"[5] Results saved to: {RESULTS_PATH}")
     print("Done ✅")
+    """
