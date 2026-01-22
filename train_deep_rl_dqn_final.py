@@ -167,7 +167,7 @@ def evaluate_with_history(
 
             ep_reward += float(reward[0])
             steps += 1
-            last_info = infos[0]  # info del único env
+            last_info = infos[0]          # info from the only env
 
         ep_time = time.time() - ep_start
         print(f"[EVAL] Episode {ep+1}/{n_eval_episodes} "
@@ -319,7 +319,7 @@ def plot_training_monitor(
     """
 
     if not os.path.isfile(monitor_csv_path):
-        raise FileNotFoundError(f"No existe: {monitor_csv_path}")
+        raise FileNotFoundError(f"Does not exist: {monitor_csv_path}")
 
     # Read the CSV file, ignoring comments (lines starting with '#')
     df = pd.read_csv(
@@ -746,9 +746,9 @@ def train_dqn_with_params(
         batch_size=int(best_params["batch_size"]),
         buffer_size=int(best_params["buffer_size"]),
         learning_starts=10_000,
-        train_freq=4,
-        target_update_interval=2_000,
-        exploration_fraction=0.2,
+        train_freq=int(best_params["train_freq"]),
+        target_update_interval=int(best_params["target_update_interval"]),
+        exploration_fraction=float(best_params["exploration_fraction"]),
         exploration_final_eps=0.05,
         verbose=1,
         tensorboard_log=log_dir,
@@ -841,18 +841,18 @@ def train_dqn_with_multiple_trials(
     - Results are aggregated to provide statistical measures of performance consistency
     - Only the evaluation rewards are used for statistical analysis, not training rewards
     """
-    # Lista para guardar los resultados de cada trial
+        # List to save results of each trial
     trial_rewards = []
 
-    # Ejecutar varios trials (repeticiones)
+    # Execute several trials (repetitions)
     for trial in range(n_trials):
         print(f"\nRunning trial {trial+1}/{n_trials}")
 
-        # Entrenar el modelo para este trial con los parámetros actuales
+        # Train the model for this trial with current parameters
         best_model_path, _ = train_dqn_with_params(
             best_params=best_params,
             total_timesteps=total_timesteps,
-            seed=seed + trial,  # Aseguramos que cada trial tiene una semilla diferente
+            seed=seed + trial,  # Ensure each trial has a different seed
             log_dir=log_dir,
             best_dir=best_model_dir,
             save_path_last=save_last_model_path,
@@ -865,21 +865,21 @@ def train_dqn_with_multiple_trials(
             device=device,
         )
 
-        # Evaluar el modelo después de entrenarlo
+        # Evaluate the model after training
         print(f"Evaluating model from trial {trial + 1}...")
         history = evaluate_with_history(
             best_model_path,
             n_eval_episodes=n_eval_episodes,
-            seed=999,  # Usamos un seed fijo para la evaluación
+            seed=999,  # We use a fixed seed for evaluation
             max_steps=max_steps,
             granularity=granularity,
             time_step=time_step,
         )
 
-        # Guardar las recompensas de este trial para calcular el promedio
-        trial_rewards.append(np.mean(history["rewards"]))  # Promedio de las recompensas por episodio
+        # Save the rewards of this trial to calculate the average
+        trial_rewards.append(np.mean(history["rewards"]))  # Average of rewards per episode
 
-    # Promediar los resultados de todos los trials
+    # Average the results of all trials
     avg_reward = np.mean(trial_rewards)
     median_reward = np.median(trial_rewards)
 
@@ -980,7 +980,7 @@ def run_experiment_seeds(
         history = evaluate_with_history(
             best_model_path,
             n_eval_episodes=eval_episodes,
-            seed=999,  # Evaluamos con un seed fijo
+            seed=999,          # We evaluate with a fixed seed
             max_steps=max_steps,
             granularity=granularity,
             time_step=time_step
@@ -1673,7 +1673,6 @@ if __name__ == "__main__":
             pruner=pruner,
             optuna_train_timesteps=OPTUNA_TRAIN_TIMESTEPS,
             optuna_eval_episodes=OPTUNA_EVAL_EPISODES,
-            seed_train=0,
             seed_eval=999,
             max_steps=MAX_STEPS,
             granularity=GRANULARITY,
