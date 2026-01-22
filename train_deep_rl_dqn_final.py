@@ -35,6 +35,8 @@ import numpy as np
 import optuna
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
 
 from stable_baselines3 import DQN
 from stable_baselines3.common.monitor import Monitor
@@ -1220,6 +1222,7 @@ def make_objective(
         gamma = trial.suggest_float("gamma", 0.90, 0.999)
         batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
         buffer_size = trial.suggest_categorical("buffer_size", [50_000, 100_000, 200_000])
+        n_layers = trial.suggest_int("n_layers", 1, 3)
         neurons = trial.suggest_categorical("neurons", [64, 128, 256])
         activation_function = trial.suggest_categorical("activation_function", ["relu", "tanh"])
         reward_scaling = trial.suggest_categorical("reward_scaling", [0.1, 1.0, 10.0])
@@ -1227,8 +1230,16 @@ def make_objective(
         target_update_interval = trial.suggest_int("target_update_interval", 1000, 10000)
         train_freq = trial.suggest_int("train_freq", 1, 10)
 
+        activation_map = {
+            "relu": nn.ReLU,
+            "tanh": nn.Tanh
+        }
+
+        activation_function = activation_map[activation_function]
+        net_arch = [neurons] * n_layers
+
         policy_kwargs = dict(
-            net_arch=[neurons, neurons],
+            net_arch=net_arch,
             activation_fn=activation_function,
         )
 
@@ -1650,7 +1661,7 @@ if __name__ == "__main__":
     print(f"Experiment results saved to {filename}")
 
     # Network size
-    policy_kwargs = dict(net_arch=[256, 256])
+    policy_kwargs = None
 
     # 0. Sanity check env
     print("\n[0] check_env...")
@@ -1677,14 +1688,37 @@ if __name__ == "__main__":
             max_steps=MAX_STEPS,
             granularity=GRANULARITY,
             time_step=TIME_STEP,
-            policy_kwargs=policy_kwargs,
+            policy_kwargs=None,
         )
         best_params = study.best_params
         print(f"[1] Optuna done in {elapsed:.1f}s")
         print("[1] Best params:", best_params, "\n")
+
+        print("[1.5] Reconstructing policy_kwargs from best_params...")
+
+        activation_map = {
+            "relu": nn.ReLU,
+            "tanh": nn.Tanh
+        }
+        
+        # Recuperar valores (con defaults por seguridad)
+        n_layers = best_params.get("n_layers", 2)
+        n_units = best_params.get("n_units", 256)
+        act_str = best_params.get("activation_fn", "relu")
+        
+        # Construir la arquitectura de red [n_units, n_units, ...]
+        net_arch = [n_units] * n_layers
+        activation_fn = activation_map.get(act_str, nn.ReLU)
+
+        policy_kwargs = dict(
+            net_arch=net_arch,
+            activation_fn=activation_fn
+        )
+        print(f"[1.5] Policy Kwargs optimizados: {policy_kwargs}\n")
     else:
         best_params = {"learning_rate": 1e-4, "gamma": 0.99, "batch_size": 128, "buffer_size": 200_000}
-        print("[1] Skipping Optuna. Using:", best_params, "\n")
+        policy_kwargs = dict(net_arch=[256, 256])
+        print("[1] Skipping Optuna. Using defaults:", best_params, "\n")
 
     # 2. Final training with auto-best-save
     print("[2] Training final model (auto-best-save)...")
@@ -1709,7 +1743,7 @@ if __name__ == "__main__":
     # 3. Evaluate best model
     print("[3] Evaluating best model (with success rate + plots)...")
 
-    best_model_path = "/home/mapacheroja/apr-lab-2/20260107_063620/best/best_model.zip"
+    #best_model_path = "/home/mapacheroja/apr-lab-2/20260107_063620/best/best_model.zip"
 
     print("Evaluating...")
 
@@ -1726,11 +1760,17 @@ if __name__ == "__main__":
 
     print(f"[3] Success rate: {eval_metrics['success_rate']*100:.2f}%")
     print(f"[3] Mean reward: {eval_metrics['rewards'].mean():.2f} ± {eval_metrics['rewards'].std():.2f}")
+    print(f"[3] Median reward: {np.median(eval_metrics['rewards']):.2f}")
     print(f"[3] Mean final ||ω||: {np.nanmean(eval_metrics['final_w_norm']):.4f}")
 
     plot_eval_history_scatter(eval_metrics, save_dir=PLOTS_DIR, prefix="best_model_eval")
 
     # 4. Save summary
+    policy_kwargs_serializable = policy_kwargs.copy()
+
+    if "activation_fn" in policy_kwargs_serializable:
+        policy_kwargs_serializable["activation_fn"] = str(policy_kwargs_serializable["activation_fn"].__name__)
+
     results = {
         "timestamp": datetime.now().isoformat(),
         "seed": SEED,
@@ -1770,7 +1810,8 @@ if __name__ == "__main__":
         json.dump(results, f, indent=2, ensure_ascii=False, default=numpy_json_default)
 
     # Save training monitor plot
-    monitor_path = "/home/mapacheroja/apr-lab-2/20260107_063620/logs/monitor.csv"
+    # monitor_path = "/home/mapacheroja/apr-lab-2/20260107_063620/logs/monitor.csv"
+    monitor_path = os.path.join(LOG_DIR, "monitor.csv")
 
     # Plot training monitor
     plot_training_monitor(
