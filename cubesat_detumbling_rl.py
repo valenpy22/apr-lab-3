@@ -38,7 +38,7 @@ class CubeSatDetumblingEnv(gym.Env):
 
     metadata = {'render_modes': ['human', 'none']}
 
-    def __init__(self, render_mode=None, max_steps=10, start_time=datetime.now(), time_step=0.1, granularity=40, debug=False, num_bins=4, plot_hist=False):
+    def __init__(self, render_mode=None, max_steps=10, start_time=datetime.now(), time_step=0.1, granularity=40, debug=False, num_bins=4, plot_hist=False, reward_scaling: float = 10.0):
         """
         Initialize the CubeSat environment for the detumbling problem.
 
@@ -58,6 +58,7 @@ class CubeSatDetumblingEnv(gym.Env):
         self.current_time = start_time
         self.sim_granularity = granularity
         self._plot_hist = plot_hist
+        self.reward_scaling = reward_scaling
 
         # initialize simulator components
         self.rotation_sim = None
@@ -410,7 +411,7 @@ class CubeSatDetumblingEnv(gym.Env):
 
         # 2) Shaping for improvement (if ||ω|| decreases, positive)
         improvement = previous_angular_vel_norm - angular_vel_norm
-        shaped_reward = 10.0 * improvement
+        shaped_reward = self.reward_scaling * improvement
 
         # 3) Adaptive control penalty:
         #    far: soft; near: strong (to avoid over-control and oscillation)
@@ -424,9 +425,6 @@ class CubeSatDetumblingEnv(gym.Env):
 
         # 5) Total reward: scaling applied here
         reward = base_reward + shaped_reward + control_penalty + success_bonus
-
-        # Apply the reward scaling factor here
-        reward *= reward_scaling
 
         return float(reward)
 
