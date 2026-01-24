@@ -13,3 +13,5 @@ optuna
 torch
 stable_baselines3
 tensorboard
+tqdm
+rich
