@@ -52,6 +52,7 @@ class CubeSatDetumblingEnv(gym.Env):
         """
         super().__init__()
 
+        self._start_time = start_time
         self.render_mode = render_mode
         self.max_steps = max_steps
         self.time_step = time_step
@@ -203,6 +204,8 @@ class CubeSatDetumblingEnv(gym.Env):
             tuple: (observation, information)
         """
         super().reset(seed=seed)
+
+        start_time = getattr(self, '_start_time', None)
 
         if self.start_time is None:
             self.current_time = datetime.datetime(2025, 1, 1)
