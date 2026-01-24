@@ -137,9 +137,15 @@ def evaluate_with_history(
 
     load_path = model_path[:-4] if model_path.endswith(".zip") else model_path
 
+    start_time = FIXED_START_TIME if USE_FIXED_START_TIME else None
+
     eval_env = DummyVecEnv([make_env(
-        max_steps=max_steps, granularity=granularity, time_step=time_step,
-        seed=seed, log_dir=None
+        max_steps=max_steps,
+        granularity=granularity,
+        time_step=time_step,
+        seed=seed,
+        log_dir=None,
+        start_time=start_time
     )])
 
     model = DQN.load(load_path)

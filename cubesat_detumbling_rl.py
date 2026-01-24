@@ -204,6 +204,11 @@ class CubeSatDetumblingEnv(gym.Env):
         """
         super().reset(seed=seed)
 
+        if self.start_time is None:
+            self.current_time = datetime.datetime(2025, 1, 1)
+        else:
+            self.current_time = self.start_time
+
         # stop simulations to then restart them for new episode
         self._stop_simulators()
         self._create_simulators()
