@@ -9,3 +9,7 @@ pymongo
 pillow
 matplotlib
 gymnasium
+optuna
+torch
+stable_baselines3
+tensorboard
