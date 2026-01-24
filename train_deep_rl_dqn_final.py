@@ -705,18 +705,19 @@ def train_dqn_with_params(
 
     start_time = FIXED_START_TIME if USE_FIXED_START_TIME else None
 
+    reward_scaling = float(best_params.get("reward_scaling", 10.0))
+
     train_env = DummyVecEnv([make_env(
         max_steps=max_steps, granularity=granularity, time_step=time_step,
-        seed=seed, log_dir=log_dir,
-        start_time=start_time
+        seed=seed, log_dir=log_dir, start_time=start_time,
+        reward_scaling=reward_scaling
     )])
 
     eval_env = DummyVecEnv([make_env(
         max_steps=max_steps, granularity=granularity, time_step=time_step,
-        seed=seed + 1, log_dir=None,
-        start_time=start_time
+        seed=seed + 1, log_dir=None, start_time=start_time,
+        reward_scaling=reward_scaling
     )])
-
 
     stop_cb = StopTrainingOnNoModelImprovement(
         max_no_improvement_evals=15,
@@ -748,9 +749,9 @@ def train_dqn_with_params(
         batch_size=int(best_params["batch_size"]),
         buffer_size=int(best_params["buffer_size"]),
         learning_starts=10_000,
-        train_freq=int(best_params["train_freq"]),
-        target_update_interval=int(best_params["target_update_interval"]),
-        exploration_fraction=float(best_params["exploration_fraction"]),
+        train_freq=int(best_params.get("train_freq", 4)),
+        target_update_interval=int(best_params.get("target_update_interval", 2000)),
+        exploration_fraction=float(best_params.get("exploration_fraction", 0.2)),
         exploration_final_eps=0.05,
         verbose=1,
         tensorboard_log=log_dir,
