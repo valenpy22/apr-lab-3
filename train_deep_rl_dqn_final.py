@@ -1786,10 +1786,15 @@ if __name__ == "__main__":
 
     results = {
         "timestamp": datetime.now().isoformat(),
-        "seed": SEED,
+        "seeds": {
+            "base_seed": SEED,
+            "eval_seed": 999,
+            "n_seeds_experiment": N_SEEDS,
+        },
         "device": DEVICE,
         "optuna": {
             "run": RUN_OPTUNA,
+            "study_name": "dqn_cubesat",
             "n_trials": N_TRIALS,
             "train_timesteps": OPTUNA_TRAIN_TIMESTEPS,
             "eval_episodes": OPTUNA_EVAL_EPISODES
@@ -1799,6 +1804,10 @@ if __name__ == "__main__":
             "eval_freq": EVAL_FREQ,
             "n_eval_episodes_during_train": N_EVAL_EPISODES,
             "policy_kwargs": policy_kwargs,
+            "dqn_fixed_params": {
+                "learning_starts": 10_000,
+                "exploration_final_eps": 0.05,
+            }
         },
          "best_params": best_params,
          "final_eval": eval_metrics,
@@ -1841,7 +1850,7 @@ if __name__ == "__main__":
         prefix="final_eval"
     ) 
  
-    best_model_path = "/home/mapacheroja/apr-lab-2/20260107_063620/best/best_model.zip"
+    # best_model_path = "/home/mapacheroja/apr-lab-2/20260107_063620/best/best_model.zip"
 
     """
     print("\n[4] Running granularity sweep...")
