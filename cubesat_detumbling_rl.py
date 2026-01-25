@@ -56,7 +56,7 @@ class CubeSatDetumblingEnv(gym.Env):
         self.render_mode = render_mode
         self.max_steps = max_steps
         self.time_step = time_step
-        self.current_time = start_time
+        self.current_time = self._start_time if self._start_time is not None else datetime(2025, 1, 1)
         self.sim_granularity = granularity
         self._plot_hist = plot_hist
         self.reward_scaling = reward_scaling

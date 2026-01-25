@@ -1686,7 +1686,7 @@ if __name__ == "__main__":
             n_trials=N_TRIALS,
             device=DEVICE,
             study_name="dqn_cubesat",
-            storage=None,  # if you want to persist: "sqlite:///optuna.db"
+            storage="sqlite:///runs/dqn_cubesat/optuna.db",  # if you want to persist: "sqlite:///optuna.db"
             load_if_exists=True,
             pruner=pruner,
             optuna_train_timesteps=OPTUNA_TRAIN_TIMESTEPS,
@@ -1698,6 +1698,10 @@ if __name__ == "__main__":
             policy_kwargs=None,
         )
         best_params = study.best_params
+
+        with open(os.path.join(paths["run_dir"], "best_params.json"), "w") as f:
+            json.dump(best_params, f, indent=2)
+
         print(f"[1] Optuna done in {elapsed:.1f}s")
         print("[1] Best params:", best_params, "\n")
 
@@ -1726,6 +1730,8 @@ if __name__ == "__main__":
         best_params = {"learning_rate": 1e-4, "gamma": 0.99, "batch_size": 128, "buffer_size": 200_000}
         policy_kwargs = dict(net_arch=[256, 256])
         print("[1] Skipping Optuna. Using defaults:", best_params, "\n")
+
+
 
     # 2. Final training with auto-best-save
     print("[2] Training final model (auto-best-save)...")
