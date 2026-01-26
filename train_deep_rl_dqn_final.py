@@ -1749,11 +1749,55 @@ if __name__ == "__main__":
             net_arch=net_arch,
             activation_fn=activation_fn
         )
-        print(f"[1.5] Policy Kwargs optimizados: {policy_kwargs}\n")
+        print(f"[1.5] Optimized Policy Kwargs: {policy_kwargs}\n")
     else:
-        best_params = {"learning_rate": 1e-4, "gamma": 0.99, "batch_size": 128, "buffer_size": 200_000}
-        policy_kwargs = dict(net_arch=[256, 256])
-        print("[1] Skipping Optuna. Using defaults:", best_params, "\n")
+        print("[1] RUN_OPTUNA=False -> loading best_params from sqlite (Optuna study)...")
+
+        os.makedirs("runs/dqn_cubesat", exist_ok=True)
+        STORAGE = "sqlite:///runs/dqn_cubesat/optuna.db"
+        STUDY_NAME = "dqn_cubesat"
+
+        try:
+            study = optuna.load_study(study_name=STUDY_NAME, storage=STORAGE)
+            best_params = study.best_params
+
+            # (Optional) save a copy in the current run
+            with open(os.path.join(paths["run_dir"], "best_params_loaded_from_db.json"), "w") as f:
+                json.dump(best_params, f, indent=2)
+
+            print("[1] Best params loaded from DB:", best_params)
+
+            # Reconstruct policy_kwargs 
+            # Reconstruct policy_kwargs ONLY from DB params (strict)
+            required_arch_keys = ["n_layers", "neurons", "activation_function"]
+            missing = [k for k in required_arch_keys if k not in best_params]
+
+            if missing:
+                raise ValueError(
+                    f"Optuna DB best_params does not contain architecture keys {missing}. "
+                    f"This means your stored study '{STUDY_NAME}' never optimized architecture "
+                    f"(or you are loading an older study). "
+                    f"Keys present: {sorted(best_params.keys())}"
+                )
+
+            activation_map = {"relu": nn.ReLU, "tanh": nn.Tanh}
+
+            n_layers = int(best_params["n_layers"])
+            n_units  = int(best_params["neurons"])
+            act_str  = str(best_params["activation_function"]).lower()
+
+            net_arch = [n_units] * n_layers
+            activation_fn = activation_map[act_str]  # will KeyError if invalid, good
+
+            policy_kwargs = dict(net_arch=net_arch, activation_fn=activation_fn)
+            print(f"[1] Policy kwargs from DB: {policy_kwargs}\n")
+
+        except Exception as e:
+            print("[WARN] I couldn't load the study from sqlite. Reason:", repr(e))
+            print("[WARN] Using hardcoded defaults.")
+            best_params = {"learning_rate": 1e-4, "gamma": 0.99, "batch_size": 128, "buffer_size": 200_000}
+            policy_kwargs = dict(net_arch=[256, 256])
+
 
     # 2. Multi-Seed Final Training
     print(f"\n[2] Starting Multi-Seed Training (Master: {FINAL_TIMESTEPS} steps, Others: 500k steps)")
