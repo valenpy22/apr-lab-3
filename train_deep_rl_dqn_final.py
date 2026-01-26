@@ -1617,7 +1617,7 @@ if __name__ == "__main__":
 
     # Optuna
     RUN_OPTUNA = True
-    N_TRIALS = 15
+    N_TRIALS = 60
     OPTUNA_TRAIN_TIMESTEPS = 50_000
     OPTUNA_EVAL_EPISODES = 5
 
