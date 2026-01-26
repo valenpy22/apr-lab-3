@@ -1650,6 +1650,7 @@ if __name__ == "__main__":
     EVAL_EPISODES = 50
     SEED_BASE = 123  # Base seed
 
+    """
     # After defining everything, we run the experiment
     experiment_df = run_experiment_seeds(
         n_seeds=N_SEEDS,
@@ -1666,7 +1667,8 @@ if __name__ == "__main__":
     experiment_df.to_json("experiment_results.json", orient="records")
 
     print(f"Experiment results saved to {filename}")
-
+    """
+    
     # Network size
     policy_kwargs = None
 
