@@ -1610,6 +1610,28 @@ def numpy_json_default(obj):
     # If something weird appears, raise the original error
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
+def plot_robustness_analysis(df_seeds, save_dir):
+    """
+    Generates a bar plot with error bars to show the stability
+    of the model across different seeds.
+    """
+    plt.figure(figsize=(10, 6))
+
+    # Mean Reward plot with error bars (standard deviation)
+    plt.bar(df_seeds['seed'].astype(str), df_seeds['mean_reward'],
+            yerr=df_seeds['std_reward'], capsize=5, color='skyblue', alpha=0.7)
+
+    plt.axhline(y=df_seeds['mean_reward'].mean(), color='r', linestyle='--', label=f"Total Average: {df_seeds['mean_reward'].mean():.2f}")
+
+    plt.title("Robustness Analysis: Mean Reward by Seed")
+    plt.xlabel("Random Seed")
+    plt.ylabel("Mean Reward ± Standard Deviation")
+    plt.legend()
+    plt.grid(axis='y', linestyle='--', alpha=0.6)
+    
+    plt.savefig(os.path.join(save_dir, "robustness_seeds.png"))
+    plt.close()
+
 if __name__ == "__main__":
     # Fixed start time
     USE_FIXED_START_TIME = True
@@ -1714,12 +1736,12 @@ if __name__ == "__main__":
             "tanh": nn.Tanh
         }
         
-        # Recuperar valores (con defaults por seguridad)
+        # Recover values (with defaults for safety)
         n_layers = best_params.get("n_layers", 2)
         n_units = best_params.get("n_units", 256)
         act_str = best_params.get("activation_fn", "relu")
         
-        # Construir la arquitectura de red [n_units, n_units, ...]
+        # Construct the network architecture
         net_arch = [n_units] * n_layers
         activation_fn = activation_map.get(act_str, nn.ReLU)
 
@@ -1733,32 +1755,100 @@ if __name__ == "__main__":
         policy_kwargs = dict(net_arch=[256, 256])
         print("[1] Skipping Optuna. Using defaults:", best_params, "\n")
 
+    # 2. Multi-Seed Final Training
+    print(f"\n[2] Starting Multi-Seed Training (Master: {FINAL_TIMESTEPS} steps, Others: 500k steps)")
+    
+    seeds = [SEED, 42, 1337, 2024, 999]  # 5 seeds including your base SEED
+    all_seed_results = []
 
+    for i, s in enumerate(seeds):
+        # The first training is long (900k), the rest are short (500k)
+        current_timesteps = FINAL_TIMESTEPS if i == 0 else 500_000
+        print(f"\n>>> Running Seed {s} ({i+1}/{len(seeds)}) - Timesteps: {current_timesteps}")
+        
+        # We create subdirectories to avoid overwriting models from each seed
+        seed_path = os.path.join(paths["run_dir"], f"seed_{s}")
+        seed_run_dir = os.path.join(paths["run_dir"], f"seed_{s}")
+        seed_log_dir = os.path.join(seed_run_dir, "logs")
+        seed_best_dir = os.path.join(seed_run_dir, "best")
+        seed_models_dir = os.path.join(seed_run_dir, "models")
+        seed_save_last = os.path.join(seed_models_dir, "dqn_last.zip")
+        os.makedirs(seed_path, exist_ok=True)
+        os.makedirs(seed_log_dir, exist_ok=True)
+        os.makedirs(seed_best_dir, exist_ok=True)
+        os.makedirs(seed_models_dir, exist_ok=True)
 
-    # 2. Final training with auto-best-save
-    print("[2] Training final model (auto-best-save)...")
-    best_model_path, last_model_path = train_dqn_with_params(
-        best_params=best_params,
-        total_timesteps=FINAL_TIMESTEPS,
-        seed=SEED,
-        log_dir=LOG_DIR,
-        best_dir=BEST_DIR,
-        save_path_last=SAVE_LAST,
-        max_steps=MAX_STEPS,
-        granularity=GRANULARITY,
-        time_step=TIME_STEP,
-        policy_kwargs=policy_kwargs,
-        device=DEVICE,
-        eval_freq=EVAL_FREQ,
-        n_eval_episodes=N_EVAL_EPISODES,
-    )
-    print(f"[2] Best model: {best_model_path}")
-    print(f"[2] Last model: {last_model_path}\n")
+        best_model_p, last_model_p = train_dqn_with_params(
+            best_params=best_params,
+            total_timesteps=current_timesteps,
+            seed=s,
+            log_dir=seed_log_dir,
+            best_dir=seed_best_dir,
+            save_path_last=seed_save_last,
+            max_steps=MAX_STEPS,
+            granularity=GRANULARITY,
+            time_step=TIME_STEP,
+            policy_kwargs=policy_kwargs,
+            device=DEVICE,
+            eval_freq=EVAL_FREQ,
+            n_eval_episodes=N_EVAL_EPISODES,
+        )
+
+        # 3. Immediate evaluation of this seed
+        print(f"Evaluating Seed {s}...")
+        eval_metrics = evaluate_with_history(
+            best_model_p,
+            n_eval_episodes=FINAL_EVAL_EPISODES,
+            seed=999, # Keep evaluation seed constant for comparison
+            max_steps=MAX_STEPS,
+            granularity=GRANULARITY,
+            time_step=TIME_STEP
+        )
+        
+        # We save key metrics from this seed
+        seed_data = {
+            "seed": s,
+            "timesteps": current_timesteps,
+            "success_rate": eval_metrics['success_rate'],
+            "mean_reward": eval_metrics['rewards'].mean(),
+            "std_reward": eval_metrics['rewards'].std(),
+            "mean_final_w": np.nanmean(eval_metrics['final_w_norm']),
+            "best_model": best_model_p
+        }
+        all_seed_results.append(seed_data)
+
+        # Save individual seed CSV in case the rest fails
+        pd.DataFrame([seed_data]).to_csv(os.path.join(seed_path, "seed_summary.csv"), index=False)
+
+        plot_training_monitor(
+            monitor_csv_path=os.path.join(seed_log_dir, "monitor.csv"),
+            window=50,
+            save_dir=seed_run_dir, # It is saved inside the seed folder
+            prefix=f"training_seed_{s}"
+        )        
+
+    # Convert everything to a DataFrame for statistical analysis
+    df_seeds = pd.DataFrame(all_seed_results)
+
+    best_idx = df_seeds['mean_reward'].idxmax()
+    winner_seed = df_seeds.loc[best_idx, 'seed']
+    
+    best_model_path = df_seeds.loc[best_idx, 'best_model']
+    df_seeds.to_csv(os.path.join(paths["run_dir"], "multi_seed_results.csv"), index=False)
+    summary_path = os.path.join(paths["run_dir"], "multi_seed_summary.json")
+
+    print("\n[2] Multi-seed Training Complete! ✅")
+    print(df_seeds[["seed", "success_rate", "mean_reward", "mean_final_w"]])
+    print(f"[2] Best Seed: {winner_seed} with Mean Reward: {df_seeds.loc[best_idx, 'mean_reward']:.2f}")
+    print(f"[2] Best Model Path: {best_model_path}")
+
+    with open(summary_path, "w") as f:
+        json.dump(all_seed_results, f, indent=2, default=numpy_json_default)
+
+    plot_robustness_analysis(all_seed_results, PLOTS_DIR)
 
     # 3. Evaluate best model
     print("[3] Evaluating best model (with success rate + plots)...")
-
-    #best_model_path = "/home/mapacheroja/apr-lab-2/20260107_063620/best/best_model.zip"
 
     print("Evaluating...")
 
