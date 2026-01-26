@@ -1638,7 +1638,7 @@ if __name__ == "__main__":
     FIXED_START_TIME = datetime(2025, 1, 1)
 
     # Optuna
-    RUN_OPTUNA = True
+    RUN_OPTUNA = False
     N_TRIALS = 60
     OPTUNA_TRAIN_TIMESTEPS = 50_000
     OPTUNA_EVAL_EPISODES = 5
